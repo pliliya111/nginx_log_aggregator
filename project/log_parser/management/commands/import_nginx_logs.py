@@ -53,13 +53,17 @@ class Command(BaseCommand):
                 return
             with open(source, "r") as file:
                 lines = file.readlines()
-
-        # Парсинг каждой строки лога
+        log_entries = []
         for line in lines:
             if line:
-                self.parse_line(
+                log_entry = self.parse_line(
                     line.decode("utf-8") if isinstance(line, bytes) else line
                 )
+                if log_entry:
+                    log_entries.append(log_entry)
+        batch_size = 1000
+        for i in range(0, len(log_entries), batch_size):
+            NginxLog.objects.bulk_create(log_entries[i:i + batch_size])
 
     def parse_line(self, line):
         """
@@ -81,9 +85,7 @@ class Command(BaseCommand):
 
             # Преобразование строки даты в объект datetime
             date = datetime.strptime(date_str, "%d/%b/%Y:%H:%M:%S %z")
-
-            # Сохранение записи в базе данных
-            NginxLog.objects.create(
+            return NginxLog(
                 ip_address=ip_address,
                 date=date,
                 http_method=http_method,
@@ -94,3 +96,4 @@ class Command(BaseCommand):
         except (json.JSONDecodeError, ValueError) as e:
             # Логирование предупреждения в случае ошибки парсинга
             logger.warning(f"Skipping invalid log line: {line} - Error: {e}")
+            return None
